@@ -27,7 +27,7 @@ for i in "${!machines[@]}"; do
 	if ssh -o BatchMode=yes -o ConnectTimeout=10 "$machine" "bash -s -- $seed" <<'REMOTE'
 set -euo pipefail
 # Set this to the project directory on your remote machines.
-cd "$HOME/ddpg-td3-layernorm-lunar"
+cd "/Vrac/21500050/ddpg-td3-layernorm-lunar"
 bash ./scripts/run_experiment.sh "$1"
 REMOTE
 	then
