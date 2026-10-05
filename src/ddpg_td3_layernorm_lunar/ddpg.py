@@ -15,7 +15,7 @@ class DDPG:
         action_dim: int,
         max_action: float,
         discount: float = 0.99,
-        tau: float = 0.001,
+        tau: float = 0.005,
         device: str = "cpu",
         layer_normalization: bool = False,
     ):

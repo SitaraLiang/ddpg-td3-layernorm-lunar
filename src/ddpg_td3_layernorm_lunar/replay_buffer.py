@@ -3,7 +3,9 @@ from torch import Tensor
 
 
 class ReplayBuffer:
-    def __init__(self, state_dim: int, action_dim: int, max_size: int = int(1e6)):
+    def __init__(
+        self, state_dim: int, action_dim: int, max_size: int = int(1e6), device="cpu"
+    ):
         self.max_size = max_size
         self.ptr = 0
         self.size = 0
@@ -15,7 +17,7 @@ class ReplayBuffer:
         self.terminated = torch.zeros((max_size, 1))
         self.truncated = torch.zeros((max_size, 1))
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
 
     def add(
         self,
