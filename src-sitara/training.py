@@ -21,6 +21,7 @@ from networks import ContinuousDeterministicActor, ContinuousQNetwork, GaussianN
 from config import DDPGConfig, TD3Config
 from rl_mind.notebook import run_directory, setup_tensorboard, silence_known_warnings
 
+
 def compute_critic_loss(
     gamma: float, batch: Transitions[Action], q_values: Tensor, next_q_values: Tensor
 ) -> Tensor:
@@ -35,8 +36,9 @@ def compute_critic_loss(
     """
     # Compute the target (do not bootstrap when `batch.terminated`), then the MSE loss
     with torch.no_grad():
-        target = batch.reward + gamma * (1-batch.terminated.float()) * next_q_values
+        target = batch.reward + gamma * (1 - batch.terminated.float()) * next_q_values
     return F.mse_loss(q_values, target)
+
 
 def compute_actor_loss(q_values: Tensor) -> Tensor:
     """Return the actor loss given Q(s_t, pi(s_t)) (shape `[B]`)"""
@@ -48,8 +50,12 @@ def run_ddpg(cfg: DDPGConfig) -> BiasEvaluator:
     """Notebook DDPG: current actor in backups, soft target critic, replay."""
     torch.manual_seed(cfg.seed)
     env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, same_step_reset=True)
-    actor = ContinuousDeterministicActor(env.observation_dim, cfg.actor_hidden, env.action_dim, cfg.actor_layer_norm)
-    critic = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.layer_norm)
+    actor = ContinuousDeterministicActor(
+        env.observation_dim, cfg.actor_hidden, env.action_dim, cfg.actor_layer_norm
+    )
+    critic = ContinuousQNetwork(
+        env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.layer_norm
+    )
     target_critic = copy.deepcopy(critic).requires_grad_(False)
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=cfg.lr_actor)
     critic_optimizer = torch.optim.Adam(critic.parameters(), lr=cfg.lr_critic)
@@ -57,10 +63,12 @@ def run_ddpg(cfg: DDPGConfig) -> BiasEvaluator:
     # Data collection (with exploration noise), replay buffer and evaluation
     collector = TransitionCollector(env, GaussianNoise(actor, cfg.action_noise))
     buffer = ReplayBuffer(cfg.buffer_size)
-    run_dir = run_directory(f"ddpg-{cfg.env_name}-LN{int(cfg.layer_norm)}-actorLN{int(cfg.actor_layer_norm)}-S{cfg.seed}")
+    run_dir = run_directory(
+        f"ddpg-{cfg.env_name}-LN{int(cfg.layer_norm)}-actorLN{int(cfg.actor_layer_norm)}-S{cfg.seed}"
+    )
     evaluator = Evaluator(
         VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100),
-        every=cfg.eval_interval, # number of training steps between two evaluations
+        every=cfg.eval_interval,  # number of training steps between two evaluations
         run_dir=run_dir,
         writer=SummaryWriter(run_dir),
     )
@@ -86,7 +94,7 @@ def run_ddpg(cfg: DDPGConfig) -> BiasEvaluator:
 
         # Q-values of the actions that were played (this is where gradients flow)
         # Current critic: evaluates stored historical actions in current states
-        q_values = critic(batch.obs, batch.action.value) # (64,)
+        q_values = critic(batch.obs, batch.action.value)  # (64,)
         # Q-values of the *current* actor's actions in the next states,
         # estimated by the target critic (no gradient!)
         with torch.no_grad():
@@ -94,7 +102,6 @@ def run_ddpg(cfg: DDPGConfig) -> BiasEvaluator:
             next_actions = actor(batch.next_obs).value
             next_q_values = target_critic(batch.next_obs, next_actions)
         critic_loss = compute_critic_loss(cfg.gamma, batch, q_values, next_q_values)
-
 
         critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -121,25 +128,35 @@ def run_ddpg(cfg: DDPGConfig) -> BiasEvaluator:
 
     pbar.close()
     return evaluator
-    
+
 
 def run_td3(cfg: TD3Config | None = None) -> BiasEvaluator:
     """TD3: two critics, target actor with noise smoothing, delayed actor/target updates."""
     torch.manual_seed(cfg.seed)
     env = VecEnv(cfg.env_name, cfg.n_envs, seed=cfg.seed, same_step_reset=True)
-    actor = ContinuousDeterministicActor(env.observation_dim, cfg.actor_hidden, env.action_dim, cfg.actor_layer_norm)
-    critic1 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.layer_norm)
-    critic2 = ContinuousQNetwork(env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.layer_norm)
+    actor = ContinuousDeterministicActor(
+        env.observation_dim, cfg.actor_hidden, env.action_dim, cfg.actor_layer_norm
+    )
+    critic1 = ContinuousQNetwork(
+        env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.layer_norm
+    )
+    critic2 = ContinuousQNetwork(
+        env.observation_dim, cfg.critic_hidden, env.action_dim, cfg.layer_norm
+    )
     target_actor = copy.deepcopy(actor).requires_grad_(False)
     target_critic1 = copy.deepcopy(critic1).requires_grad_(False)
     target_critic2 = copy.deepcopy(critic2).requires_grad_(False)
-    
+
     actor_optimizer = torch.optim.Adam(actor.parameters(), lr=cfg.lr_actor)
-    critic_optimizer = torch.optim.Adam(list(critic1.parameters()) + list(critic2.parameters()), lr=cfg.lr_critic)
-    
+    critic_optimizer = torch.optim.Adam(
+        list(critic1.parameters()) + list(critic2.parameters()), lr=cfg.lr_critic
+    )
+
     collector = TransitionCollector(env, GaussianNoise(actor, cfg.action_noise))
     buffer = ReplayBuffer(cfg.buffer_size)
-    run_dir = run_directory(f"td3-{cfg.env_name}-LN{int(cfg.layer_norm)}-actorLN{int(cfg.actor_layer_norm)}-S{cfg.seed}")
+    run_dir = run_directory(
+        f"td3-{cfg.env_name}-LN{int(cfg.layer_norm)}-actorLN{int(cfg.actor_layer_norm)}-S{cfg.seed}"
+    )
     evaluator = Evaluator(
         VecEnv(cfg.env_name, cfg.n_eval_envs, seed=cfg.seed + 100),
         every=cfg.eval_interval,
@@ -155,7 +172,7 @@ def run_td3(cfg: TD3Config | None = None) -> BiasEvaluator:
                 writer=writer)
     """
 
-    updates = 0 # counter of critic-update round
+    updates = 0  # counter of critic-update round
     pbar = tqdm(total=cfg.max_steps)
     while collector.steps < cfg.max_steps:
         buffer.add(collector.collect(cfg.steps_per_update))
@@ -174,7 +191,7 @@ def run_td3(cfg: TD3Config | None = None) -> BiasEvaluator:
         # critic_1, and softly update the three target networks.
         with torch.no_grad():
             next_actions = target_actor(batch.next_obs).value
-            # randn_like: Returns a tensor with the same size as input that is filled with random numbers from a 
+            # randn_like: Returns a tensor with the same size as input that is filled with random numbers from a
             # normal distribution with mean 0 and variance 1.
             noise = (torch.randn_like(next_actions) * cfg.target_noise).clamp(
                 -cfg.target_noise_clip, cfg.target_noise_clip
@@ -183,18 +200,20 @@ def run_td3(cfg: TD3Config | None = None) -> BiasEvaluator:
             # torch.minimum: takes the smaller value for each transition.
             next_values = torch.minimum(
                 target_critic1(batch.next_obs, next_actions),
-                target_critic2(batch.next_obs, next_actions)
+                target_critic2(batch.next_obs, next_actions),
             )
-        loss_1 = compute_critic_loss(cfg.gamma, batch, critic1(batch.obs, batch.action.value), next_values)
+        loss_1 = compute_critic_loss(
+            cfg.gamma, batch, critic1(batch.obs, batch.action.value), next_values
+        )
         loss_2 = compute_critic_loss(
             cfg.gamma, batch, critic2(batch.obs, batch.action.value), next_values
         )
         critic_loss = loss_1 + loss_2
         critic_optimizer.zero_grad()
         critic_loss.backward()
-        critic_optimizer.step() # update both critics.
+        critic_optimizer.step()  # update both critics.
         evaluator.writer.add_scalar("loss/critic", critic_loss.item(), collector.steps)
-        
+
         updates += 1
 
         if updates % cfg.policy_delay == 0:
@@ -208,7 +227,9 @@ def run_td3(cfg: TD3Config | None = None) -> BiasEvaluator:
             soft_update(actor, target_actor, cfg.tau)
             soft_update(critic1, target_critic1, cfg.tau)
             soft_update(critic2, target_critic2, cfg.tau)
-            evaluator.writer.add_scalar("loss/actor", actor_loss.item(), collector.steps)
+            evaluator.writer.add_scalar(
+                "loss/actor", actor_loss.item(), collector.steps
+            )
 
         if result := evaluator.run_if_needed(collector.steps, actor):
             pbar.set_description(
