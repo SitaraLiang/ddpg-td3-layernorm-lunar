@@ -13,6 +13,7 @@ def eval_env(
     policy: DDPG | TD3,
     env_name: str,
     eval_episodes: int,
+    verbose: bool = False,
 ):
     eval_env = gym.make(env_name, continuous=True)
 
@@ -74,11 +75,12 @@ def eval_env(
     average_reward = float(total_reward / eval_episodes)
     average_bias = float(np.mean(biases))
 
-    print(
-        f"Evaluation over {eval_episodes} episodes: "
-        f"reward={average_reward:.3f}, "
-        f"bias={average_bias:.3f}"
-    )
+    if verbose:
+        print(
+            f"Evaluation over {eval_episodes} episodes: "
+            f"reward={average_reward:.3f}, "
+            f"bias={average_bias:.3f}"
+        )
 
     return average_reward, average_bias
 
@@ -92,7 +94,7 @@ def run_policy(
     batch_size: int = 256,
     eval_freq: int = 5_000,
     expl_noise: float = 0.1,
-    seed: int = 1,
+    seed: int = 0,
     layer_normalization: bool = False,
 ) -> tuple[DDPG | TD3, list[float], list[float]]:
     # Create environment
