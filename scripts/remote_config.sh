@@ -16,6 +16,7 @@ machines=(
 	"ppti-14-302-13"
 	"ppti-14-302-14"
 	"ppti-14-302-15"
+	"ppti-14-302-16"
 )
 
 # Seeds correspond to machines in the same order.
