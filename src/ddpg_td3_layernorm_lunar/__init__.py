@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 
 from ddpg_td3_layernorm_lunar.ddpg import DDPG
 from ddpg_td3_layernorm_lunar.run import run_policy
@@ -7,7 +8,7 @@ from ddpg_td3_layernorm_lunar.td3 import TD3
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--policy", default="DDPG")  # Policy name (TD3 or DDPG)
+    parser.add_argument("--policy", default="DDPG", choices=("TD3", "DDPG"))
     parser.add_argument(
         "--env_name", default="LunarLander-v3"
     )  # OpenAI gym environment name (only LunarLander-v3)
@@ -15,7 +16,10 @@ def main() -> None:
         "--seed", default=0, type=int
     )  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument(
-        "--layer_normalization", default=False, type=bool
+        "--layer_normalization",
+        default="false",
+        type=str.lower,
+        choices=("true", "false"),
     )  # Layer normalization
     parser.add_argument(
         "--eval_episodes", default=10, type=int
@@ -48,13 +52,15 @@ def main() -> None:
     # parser.add_argument(
     #     "--policy_freq", default=2, type=int
     # )  # Frequency of delayed policy updates
-    args = parser.parse_args()
+    parser.add_argument("--results_dir", default=Path("./results"), type=Path)
 
+    args = parser.parse_args()
+    args.results_dir.mkdir(parents=True, exist_ok=True)
     # policy, steps, evaluations, biases = run_policy()
     if args.policy == "DDPG":
-        Policy = TD3
-    else:
         Policy = DDPG
+    else:
+        Policy = TD3
 
     run_policy(
         Policy=Policy,
@@ -66,5 +72,9 @@ def main() -> None:
         eval_freq=args.eval_freq,
         expl_noise=args.expl_noise,
         seed=args.seed,
-        layer_normalization=args.layer_normalization,
+        layer_normalization=args.layer_normalization == "true",
+        save_results=args.results_dir
+        / Path(
+            f"{Policy.__name__}_seed_{args.seed}_ln_{args.layer_normalization == 'true'}"
+        ),
     )

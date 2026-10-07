@@ -96,6 +96,7 @@ def run_policy(
     expl_noise: float = 0.1,
     seed: int = 0,
     layer_normalization: bool = False,
+    save_results: str | None = None,
 ) -> tuple[DDPG | TD3, list[float], list[float]]:
     # Create environment
     env = gym.make(env_name, continuous=True)
@@ -189,5 +190,8 @@ def run_policy(
                 writer.add_scalar("critic/bias", bias, timestep + 1)
 
     env.close()
+
+    if save_results:
+        np.savez(save_results, steps=steps, evaluations=evaluations, biases=biases)
 
     return (policy, steps, evaluations, biases)
