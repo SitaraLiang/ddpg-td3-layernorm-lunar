@@ -97,7 +97,7 @@ def run_policy(
     seed: int = 0,
     layer_normalization: bool = False,
     save_results: str | None = None,
-) -> tuple[DDPG | TD3, list[float], list[float]]:
+) -> tuple[DDPG | TD3, list[int], list[float], list[float]]:
     # Create environment
     env = gym.make(env_name, continuous=True)
 
@@ -113,7 +113,7 @@ def run_policy(
     max_action = float(env.action_space.high[0])
 
     # Create policy and replay buffer
-    policy = Policy(state_dim, action_dim, max_action)
+    policy = Policy(state_dim, action_dim, max_action, layer_normalization)
     replay_buffer = ReplayBuffer(state_dim, action_dim)
 
     # Use a separate TensorBoard run for each policy and seed.
@@ -128,7 +128,7 @@ def run_policy(
         evaluations = [evaluation]
         biases = [bias]
 
-        state, _ = env.reset()
+        state, _ = env.reset(seed=seed)
         terminated, truncated = False, False
         episode_reward = 0
         episode_timesteps = 0
@@ -139,7 +139,7 @@ def run_policy(
             episode_timesteps += 1
 
             # Initially start with completely random actions
-            if timestep < start_timesteps:
+            if timestep <= start_timesteps:
                 action = env.action_space.sample()
             else:
                 action = (
@@ -149,7 +149,7 @@ def run_policy(
 
             # Perform action
             next_state, reward, terminated, truncated, _ = env.step(action)
-            writer.add_scalar("reward/step", reward, timestep + 1)
+            writer.add_scalar("reward/step", reward, timestep)
 
             # Store data in replay buffer
             replay_buffer.add(
@@ -165,7 +165,7 @@ def run_policy(
             episode_reward += reward
 
             # Train agent after collecting sufficient data
-            if timestep >= start_timesteps:
+            if timestep > start_timesteps:
                 policy.train(replay_buffer, batch_size)
 
             if terminated or truncated:
@@ -173,7 +173,7 @@ def run_policy(
                 writer.add_scalar("reward/episode", episode_reward, timestep)
 
                 # Reset environment
-                state, _ = env.reset()
+                state, _ = env.reset(seed=seed + episode_num)
                 terminated, truncated = False, False
                 episode_reward = 0
                 episode_timesteps = 0
@@ -187,7 +187,7 @@ def run_policy(
                 biases.append(bias)
 
                 writer.add_scalar("reward/evaluation", evaluation, timestep)
-                writer.add_scalar("critic/bias", bias, timestep + 1)
+                writer.add_scalar("critic/bias", bias, timestep)
 
     env.close()
 
