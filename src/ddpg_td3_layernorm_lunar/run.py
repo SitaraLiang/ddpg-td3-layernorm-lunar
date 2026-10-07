@@ -139,7 +139,9 @@ def run_policy(
     max_action = float(env.action_space.high[0])
 
     # Create policy and replay buffer
-    policy = Policy(state_dim, action_dim, max_action, layer_normalization)
+    policy = Policy(
+        state_dim, action_dim, max_action, layer_normalization=layer_normalization
+    )
     replay_buffer = ReplayBuffer(state_dim, action_dim)
 
     # Use a separate TensorBoard run for each policy and seed.
