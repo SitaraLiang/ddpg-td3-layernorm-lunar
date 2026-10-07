@@ -14,11 +14,34 @@ def eval_env(
     env_name: str,
     eval_episodes: int,
     verbose: bool = False,
+    *,
+    return_episode_stats: bool = False,
 ):
+    """Evaluate reward and bias, optionally returning episode outcome statistics."""
+    if eval_episodes <= 0:
+        raise ValueError("eval_episodes must be positive")
+
     eval_env = gym.make(env_name, continuous=True)
 
     total_reward = 0.0
     biases = []
+    terminations = 0
+    truncations = 0
+
+    @torch.no_grad()
+    def estimate_q(state, action):
+        state_tensor = torch.as_tensor(
+            state, dtype=torch.float32, device=policy.device
+        ).reshape(1, -1)
+        action_tensor = torch.as_tensor(
+            action, dtype=torch.float32, device=policy.device
+        ).reshape(1, -1)
+
+        if isinstance(policy, TD3):
+            q1 = policy.critic_1(state_tensor, action_tensor)
+            q2 = policy.critic_2(state_tensor, action_tensor)
+            return torch.minimum(q1, q2).item()
+        return policy.critic(state_tensor, action_tensor).item()
 
     for _ in range(eval_episodes):
         state, _ = eval_env.reset()
@@ -31,33 +54,24 @@ def eval_env(
             action = policy.select_action(np.array(state))
 
             # Estimate Q(s_t, a_t)
-            with torch.no_grad():
-                state_tensor = (
-                    torch.as_tensor(state, dtype=torch.float32)
-                    .reshape(1, -1)
-                    .to(policy.device)
-                )
-                action_tensor = (
-                    torch.as_tensor(action, dtype=torch.float32)
-                    .reshape(1, -1)
-                    .to(policy.device)
-                )
-
-                if isinstance(policy, TD3):
-                    q1 = policy.critic_1(state_tensor, action_tensor)
-                    q2 = policy.critic_2(state_tensor, action_tensor)
-                    q_value = torch.minimum(q1, q2).item()
-                else:
-                    q_value = policy.critic(state_tensor, action_tensor).item()
-
-            q_values.append(q_value)
+            q_values.append(estimate_q(state, action))
 
             state, reward, terminated, truncated, _ = eval_env.step(action)
 
             rewards.append(reward)
             total_reward += reward
 
-        # Monte Carlo returns
+        # Count each episode once; termination takes precedence over truncation.
+        if terminated:
+            terminations += 1
+        else:
+            truncations += 1
+
+        # Incomplete trajectories contribute to reward, but not Monte Carlo bias.
+        if truncated and not terminated:
+            continue
+
+        # Monte Carlo returns for genuinely terminated episodes.
         returns = []
         G = 0.0
 
@@ -73,15 +87,27 @@ def eval_env(
     eval_env.close()
 
     average_reward = float(total_reward / eval_episodes)
-    average_bias = float(np.mean(biases))
+    average_bias = float(np.mean(biases)) if biases else float("nan")
+    episode_stats = {
+        "terminations": terminations,
+        "truncations": truncations,
+        "termination_percentage": 100.0 * terminations / eval_episodes,
+        "truncation_percentage": 100.0 * truncations / eval_episodes,
+    }
 
     if verbose:
         print(
             f"Evaluation over {eval_episodes} episodes: "
             f"reward={average_reward:.3f}, "
-            f"bias={average_bias:.3f}"
+            f"bias={average_bias:.3f}, "
+            f"terminations={terminations} "
+            f"({episode_stats['termination_percentage']:.1f}%), "
+            f"truncations={truncations} "
+            f"({episode_stats['truncation_percentage']:.1f}%)"
         )
 
+    if return_episode_stats:
+        return average_reward, average_bias, episode_stats
     return average_reward, average_bias
 
 
@@ -121,12 +147,17 @@ def run_policy(
         comment=f"_{Policy.__name__}_seed_{seed}{'_LN' if layer_normalization else ''}"
     ) as writer:
         # Evaluate on the original policy
-        evaluation, bias = eval_env(policy, env_name, eval_episodes)
+        evaluation, bias, episode_stats = eval_env(
+            policy, env_name, eval_episodes, return_episode_stats=True
+        )
         writer.add_scalar("reward/evaluation", evaluation, 0)
         writer.add_scalar("critic/bias", bias, 0)
         steps = [0]
         evaluations = [evaluation]
         biases = [bias]
+        outcome_history = {key: [value] for key, value in episode_stats.items()}
+        for key, value in episode_stats.items():
+            writer.add_scalar(f"evaluation/{key}", value, 0)
 
         state, _ = env.reset(seed=seed)
         terminated, truncated = False, False
@@ -181,10 +212,15 @@ def run_policy(
 
             # Evaluate episode
             if timestep % eval_freq == 0:
-                evaluation, bias = eval_env(policy, env_name, eval_episodes)
+                evaluation, bias, episode_stats = eval_env(
+                    policy, env_name, eval_episodes, return_episode_stats=True
+                )
                 steps.append(timestep)
                 evaluations.append(evaluation)
                 biases.append(bias)
+                for key, value in episode_stats.items():
+                    outcome_history[key].append(value)
+                    writer.add_scalar(f"evaluation/{key}", value, timestep)
 
                 writer.add_scalar("reward/evaluation", evaluation, timestep)
                 writer.add_scalar("critic/bias", bias, timestep)
@@ -192,6 +228,12 @@ def run_policy(
     env.close()
 
     if save_results:
-        np.savez(save_results, steps=steps, evaluations=evaluations, biases=biases)
+        np.savez(
+            save_results,
+            steps=steps,
+            evaluations=evaluations,
+            biases=biases,
+            **outcome_history,
+        )
 
     return (policy, steps, evaluations, biases)

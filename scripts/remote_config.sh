@@ -7,15 +7,17 @@ machines=(
 	"ppti-14-302-03"
 	"ppti-14-302-04"
 	"ppti-14-302-05"
-	# "ppti-14-302-08"
-	# "ppti-14-302-09"
+	"ppti-14-302-07"
+	"ppti-14-302-08"
+	"ppti-14-302-09"
 	"ppti-14-302-10"
 	"ppti-14-302-11"
 	"ppti-14-302-12"
 	"ppti-14-302-13"
 	"ppti-14-302-14"
+	"ppti-14-302-15"
 )
 
 # Seeds correspond to machines in the same order.
-# seeds=(0 1 2 3 4 5 6 7 8 9)
-seeds=(10 11 12 13 14 15 16 17 18 19)
+seeds=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
+# seeds=(10 11 12 13 14 15 16 17 18 19)
